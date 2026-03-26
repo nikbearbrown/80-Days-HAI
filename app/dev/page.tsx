@@ -6,8 +6,8 @@ import DevBrowser from './DevBrowser'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Dev Notes - Irreducibly Human',
-  description: 'Developer specs of Irreducibly Human projects.',
+  title: 'Dev Notes - 80 Days to Stay',
+  description: 'Developer specs of 80 Days to Stay projects.',
 }
 
 export default function DevPage() {
@@ -16,9 +16,9 @@ export default function DevPage() {
   return (
     <div className="container px-4 md:px-6 mx-auto py-12">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold tracking-tighter mb-4">Irreducibly Human: Dev Notes</h1>
+        <h1 className="text-4xl font-bold tracking-tighter mb-4">80 Days to Stay: Dev Notes</h1>
         <p className="text-muted-foreground mb-10">
-          Developer specs of Irreducibly Human projects.
+          Developer specs of 80 Days to Stay projects.
         </p>
         <DevBrowser groups={groups} />
       </div>

@@ -23,7 +23,7 @@ export async function generateMetadata({
       }
     }
   }
-  return { title: 'Dev Notes - Irreducibly Human' }
+  return { title: 'Dev Notes - 80 Days to Stay' }
 }
 
 export default async function DevDocPage({
