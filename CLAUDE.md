@@ -62,6 +62,8 @@ Brand voice: Academic, clear, direct. Informed by research, accessible to practi
 26. `/admin/dashboard/blog/import` — Import posts (Substack ZIP or blog export ZIP)
 27. `/admin/dashboard/tools` — Manage tools (link and artifact types)
 28. `/admin/dashboard/substack` — Manage Substack sections & import ZIP archives
+29. `/videos` — Videos page (paginated, tag-filtered, pinned videos, YouTube embeds)
+30. `/admin/dashboard/videos` — Manage videos (CRUD, YouTube import, bulk ops, playlist browser)
 
 ### Placeholder pages (noindex, inherited from previous project)
 - `/classes` — Coming Soon placeholder
@@ -91,7 +93,7 @@ Teaching is irreducibly human. This course covers presence, improvisation, emoti
 
 ### Header (`/components/Header/Header.tsx`) — DONE
 - Logo: text-based "80 Days to Stay" in bold tracking-tighter
-- Nav: Home (`/`) | Courses (`/courses`) | Tools (`/tools`) | Dev (`/dev`) | About (`/about`) | Blog (`/blog`)
+- Nav: Home (`/`) | Courses (`/courses`) | Tools (`/tools`) | Dev (`/dev`) | About (`/about`) | Blog (`/blog`) | Videos (`/videos`)
 - Social buttons (top right): GitHub (github.com/nikbearbrown/irreducibly-human), Substack (skepticism.ai), YouTube (youtube.com/@Musinique), Spotify (open.spotify.com/artist/0hSpFCJodAYMP2cWK72zI6) — black button style
 - Dark/light mode toggle (ThemeToggle component)
 - Mobile hamburger menu with backdrop (lg breakpoint)
@@ -172,6 +174,60 @@ CREATE POLICY "service_role_tools" ON tools FOR ALL USING (true) WITH CHECK (tru
 ### Public pages
 - `/tools` — Card grid of all tools. Artifact tools show "Artifact" badge and link to `/tools/[slug]`. Link tools open in new tab.
 - `/tools/[slug]` — Full-page artifact embed with title bar (name, description, "Back to Tools" link, optional "Open External" button). Iframe takes full viewport height minus header.
+
+## Videos system — DONE
+
+### Database (`videos` table in Neon PostgreSQL)
+```sql
+CREATE TABLE IF NOT EXISTS videos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  youtube_id TEXT NOT NULL,
+  tags TEXT[] DEFAULT '{}',
+  pinned BOOLEAN DEFAULT false,
+  published BOOLEAN DEFAULT false,
+  published_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE videos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_videos" ON videos FOR SELECT USING (published = true);
+CREATE POLICY "service_role_videos" ON videos FOR ALL USING (true) WITH CHECK (true);
+```
+
+### YouTube integration (`lib/youtube.ts`)
+- `parseYouTubeInput()` — parses channel URLs, playlist URLs, @handles, or raw IDs
+- `fetchChannelPlaylists()` — lists all playlists for a channel
+- `fetchYouTubeVideos()` — main entry point for importing videos from channels/playlists
+
+### API routes (admin-protected)
+- `GET/POST /api/admin/videos` — list & create videos
+- `PUT/DELETE /api/admin/videos/[id]` — update & delete single video
+- `POST /api/admin/videos/import-youtube` — import from YouTube channel or playlist
+- `POST /api/admin/videos/bulk-delete` — bulk delete by IDs or tag
+- `POST /api/admin/videos/bulk-update` — bulk publish/unpublish by IDs or tag
+- `POST /api/admin/videos/youtube-playlists` — list channel playlists
+
+### Public API
+- `GET /api/videos` — paginated published videos with tag filter, always includes pinned
+
+### Admin UI (`/app/admin/dashboard/videos/page.tsx`)
+- Video list with tag filter bar, pin/publish badges, YouTube embed preview
+- "New Video" button → dialog (title, YouTube ID, description, tags, pinned, published)
+- "Import from YouTube" → dialog (channel/playlist URL, tags, auto-tag)
+- "Browse Playlists" → dialog (channel URL, click to import)
+- Bulk select mode: publish, unpublish, delete selected or by tag
+- Quick-add tag buttons for course tags
+
+### Public page (`/videos`)
+- Pinned videos at top with full embed
+- Paginated video list with YouTube embeds
+- Course tag filter bar
+- Search by title/description/tag
+
+### Environment variable
+- `YOUTUBE_API_KEY` — YouTube Data API v3 key (required for import features)
 
 ## Notes system — DONE
 
@@ -449,6 +505,7 @@ NEXT_PUBLIC_SITE_URL=https://irreduciblyhuman.xyz  # Used in sitemap generation
 BLOB_READ_WRITE_TOKEN=           # Vercel Blob token (from Vercel dashboard → Storage → Blob)
 NEXT_PUBLIC_GA_ID=               # Google Analytics measurement ID (optional, e.g. G-XXXXXXXXXX)
 NEXT_PUBLIC_ANTHROPIC_API_KEY=   # only if embedding AI assistant directly
+YOUTUBE_API_KEY=                 # YouTube Data API v3 key (for video import)
 ```
 
 ## Deployment
@@ -458,7 +515,7 @@ NEXT_PUBLIC_ANTHROPIC_API_KEY=   # only if embedding AI assistant directly
 ## What NOT to do
 - Do not use localStorage — use React state or sessionStorage
 - Do not add analytics or tracking beyond what's already present
-- Keep public nav to six items: Home, Courses, Tools, Dev, About, Blog
+- Keep public nav to seven items: Home, Courses, Tools, Dev, About, Blog, Videos
 - Do not commit .env.local or credentials to git
 
 ## User Guide
@@ -636,6 +693,10 @@ app/
     tools/page.tsx                  # Tools manager (link + artifact types)
     dev/page.tsx                    # Dev docs list (filesystem browser)
     substack/page.tsx               # Substack section manager
+    videos/page.tsx                 # Video manager (CRUD, YouTube import, bulk ops)
+  videos/
+    page.tsx                        # Public videos page (pinned + paginated)
+    VideosBrowser.tsx               # Client component: search, tag filter, pagination, embeds
   api/admin/login/route.ts          # POST: validate password, set session cookie
   api/admin/blog/
     route.ts                        # GET/POST blog posts (admin, with tags)
@@ -656,6 +717,15 @@ app/
     sections/route.ts               # GET/POST sections
     sections/[id]/route.ts          # PUT/DELETE section
     upload/route.ts                 # POST ZIP import
+  api/admin/videos/
+    route.ts                        # GET/POST videos (admin)
+    [id]/route.ts                   # PUT/DELETE video (admin)
+    import-youtube/route.ts         # POST: import from YouTube channel/playlist
+    bulk-delete/route.ts            # POST: bulk delete by IDs or tag
+    bulk-update/route.ts            # POST: bulk publish/unpublish
+    youtube-playlists/route.ts      # POST: list channel playlists
+  api/videos/
+    route.ts                        # GET published videos (public, paginated)
   sitemap.ts                        # Dynamic sitemap generator
   robots.ts                         # Robots.txt generator
 middleware.ts                         # Auth middleware (protects /admin/dashboard)
@@ -672,6 +742,7 @@ lib/
   html-meta.ts                      # scanHtmlDir() + scanHtmlSubdirs() — extract metadata from HTML files
   admin-auth.ts                     # admin_session cookie check
   substack-parser.ts                # Substack ZIP parser (adm-zip)
+  youtube.ts                        # YouTube API utilities (parse URLs, fetch playlists, import videos)
   db.ts                             # Neon PostgreSQL client (sql tagged template)
   viz/
     registry.ts                     # data-viz name → lazy import map
